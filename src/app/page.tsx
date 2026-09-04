@@ -23,7 +23,7 @@ export default function Dashboard() {
   return (
     <div className="flex min-h-screen bg-[#0b1120]" dir="rtl">
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 mr-72">
+      <main className="flex-1 md:mr-72 pt-16 md:pt-0">
         {activeTab === 'dashboard' && (
           <div className="p-8">
             <h2 className="text-3xl font-bold text-white mb-4">لوحة التحكم الرئيسية</h2>
