@@ -144,7 +144,7 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                     </td>
                     <td className="px-6 py-4 text-white font-medium">{e.description}</td>
                     <td className="px-6 py-4 text-slate-400 text-sm">
-                      {e.type === 'project' ? getProjectName(e.projectId) : 'الإدارة العامة'}
+                      {e.type === 'project' ? getProjectName(e.projectId ?? null) : 'الإدارة العامة'}
                     </td>
                     <td className="px-6 py-4">
                       {e.invoiceFile ? (
