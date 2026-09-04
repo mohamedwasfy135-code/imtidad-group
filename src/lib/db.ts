@@ -1,5 +1,5 @@
 import { createClient } from '@vercel/postgres';
 
-// استخدام createClient يضمن التعامل التلقائي مع Pooled Connection
-// ويقرأ متغير POSTGRES_URL تلقائياً من البيئة
-export const db = createClient();
+// إنشاء العميل واستخراج خاصية sql للاستعلامات
+const client = createClient();
+export const db = client.sql;
