@@ -16,6 +16,54 @@ const menuItems = [
 
 export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (id: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const handleExport = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/backup');
+      if (!res.ok) throw new Error('فشل التصدير');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `imtidad-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('حدث خطأ أثناء تصدير النسخة الاحتياطية');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!confirm('سيتم استبدال كل البيانات الحالية بمحتوى هذا الملف. هل أنت متأكد؟')) {
+      e.target.value = '';
+      return;
+    }
+    setBusy(true);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const res = await fetch('/api/backup/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(json),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'فشل الاستيراد');
+      alert('تم استيراد النسخة الاحتياطية بنجاح. سيتم تحديث الصفحة الآن.');
+      window.location.reload();
+    } catch (err: any) {
+      alert('حدث خطأ أثناء الاستيراد: ' + (err.message || ''));
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  };
 
   return (
     <>
@@ -77,6 +125,19 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
       </nav>
       
       {/* تذييل القائمة */}
+      <div className="p-3 border-t border-slate-800 space-y-1.5">
+        <button
+          onClick={handleExport}
+          disabled={busy}
+          className="w-full flex items-center justify-center gap-2 bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs py-2.5 rounded-lg transition disabled:opacity-50"
+        >
+          {busy ? 'جارٍ التنفيذ...' : '⬇ تصدير نسخة احتياطية'}
+        </button>
+        <label className="w-full flex items-center justify-center gap-2 bg-slate-800/60 hover:bg-slate-800 text-slate-300 text-xs py-2.5 rounded-lg transition cursor-pointer">
+          ⬆ استيراد نسخة احتياطية
+          <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" disabled={busy} />
+        </label>
+      </div>
       <div className="p-4 border-t border-slate-800 text-center bg-[#0b1120]/50">
         <p className="text-[10px] text-slate-500 font-mono">نظام الإدارة المتكامل v2.0</p>
       </div>

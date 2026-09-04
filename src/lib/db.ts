@@ -6,12 +6,11 @@ if (!connectionString) {
   throw new Error('POSTGRES_URL (or DATABASE_URL) environment variable is missing');
 }
 
-const pool = new Pool({
+export const pool = new Pool({
   connectionString,
   ssl: { rejectUnauthorized: false },
 });
 
-// دالة متوافقة مع صيغة Template Literal المستخدمة في باقي الكود: db`SELECT ... ${value}`
 export async function db(strings: TemplateStringsArray, ...values: any[]) {
   let text = strings[0];
   for (let i = 0; i < values.length; i++) {
