@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo } from 'react';
-import { Project, Expense } from './ProjectsView';
+import { Project, Expense } from './ProjectsView'; // استيراد النوع الموحد
 
 interface ExpensesViewProps {
   expenses: Expense[];
@@ -11,7 +11,6 @@ interface ExpensesViewProps {
 export default function ExpensesView({ expenses, setExpenses, projects }: ExpensesViewProps) {
   const [showForm, setShowForm] = useState(false);
   
-  // حالة النموذج
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -19,7 +18,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
   const [projectId, setProjectId] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
-  // فلاتر العرض
   const [filterType, setFilterType] = useState<'all' | 'project' | 'admin'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -40,7 +38,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
       fileType
     }]);
 
-    // إعادة تعيين النموذج
     setDesc(''); setAmount(''); setFile(null);
     setShowForm(false);
   };
@@ -49,7 +46,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
     if (e.target.files && e.target.files[0]) setFile(e.target.files[0]);
   };
 
-  // الفلترة والبحث
   const filteredExpenses = useMemo(() => {
     return expenses.filter(e => {
       const matchType = filterType === 'all' ? true : e.type === filterType;
@@ -61,7 +57,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [expenses, filterType, searchQuery]);
 
-  // الإجماليات
   const totals = useMemo(() => {
     const adminTotal = expenses.filter(e => e.type === 'admin').reduce((s, e) => s + e.amount, 0);
     const projectTotal = expenses.filter(e => e.type === 'project').reduce((s, e) => s + e.amount, 0);
@@ -75,7 +70,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-8" dir="rtl">
-      {/* الرأس والإحصائيات السريعة */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">سجل المصروفات</h2>
@@ -86,7 +80,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
         </button>
       </header>
 
-      {/* بطاقات الملخص المالي */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-[#1e293b] p-6 rounded-2xl border border-slate-700/50">
           <h3 className="text-slate-400 text-sm mb-2">المصروفات الإدارية</h3>
@@ -102,7 +95,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
         </div>
       </div>
 
-      {/* شريط الفلاتر والبحث */}
       <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 p-4 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
           <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="بحث في الوصف أو اسم الملف..." 
@@ -120,7 +112,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
         </div>
       </div>
 
-      {/* جدول المصروفات */}
       <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-right min-w-[1000px]">
@@ -179,14 +170,12 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
         </div>
       </div>
 
-      {/* نافذة إضافة مصروف (Modal) */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
             <h3 className="text-xl font-bold text-white mb-6">تسجيل مصروف جديد</h3>
             
             <div className="space-y-4">
-              {/* اختيار نوع المصروف */}
               <div className="grid grid-cols-2 gap-4 p-1 bg-[#0f172a] rounded-lg border border-slate-700">
                 <button onClick={() => setType('admin')} className={`py-2.5 rounded-md text-sm font-medium transition-all ${type === 'admin' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
                   مصروف إداري
@@ -196,7 +185,6 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                 </button>
               </div>
 
-              {/* القائمة المنسدلة للمشاريع (تظهر فقط عند اختيار تكلفة مشروع) */}
               {type === 'project' && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
                   <label className="block text-sm text-slate-400 mb-1.5">اختر المشروع *</label>
