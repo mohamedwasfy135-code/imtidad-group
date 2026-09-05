@@ -1,6 +1,7 @@
 "use client";
 import Image from 'next/image';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const menuItems = [
   { id: 'dashboard', label: 'الرئيسية', icon: '' },
@@ -17,6 +18,7 @@ const menuItems = [
 export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string; setActiveTab: (id: string) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   const handleExport = async () => {
     setBusy(true);
@@ -65,6 +67,20 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
     }
   };
 
+  const handleLogout = async () => {
+    if (!confirm('هل تريد تسجيل الخروج؟')) return;
+    setBusy(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) {
+      // نتابع تسجيل الخروج محليًا حتى لو فشل الطلب
+    } finally {
+      document.cookie = 'auth-token=; path=/; max-age=0';
+      router.push('/login');
+      router.refresh();
+    }
+  };
+
   return (
     <>
       <button
@@ -84,13 +100,8 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
       <aside className={`w-72 bg-[#111827] border-l border-slate-800 fixed h-full right-0 z-40 flex flex-col transition-transform duration-300 ease-in-out ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       } md:translate-x-0`}>
-      {/* منطقة الشعار - تصميم محسن */}
       <div className="p-6 border-b border-slate-800 flex flex-col items-center gap-4 bg-gradient-to-b from-[#0f172a] to-[#111827]">
         <div className="relative w-28 h-28 rounded-2xl overflow-hidden shadow-2xl shadow-blue-900/20 border-4 border-white/5 group">
-          {/* 
-             ملاحظة: تأكد من وجود الملف في: public/images/logo.png 
-             إذا كان الامتداد jpg، قم بتغيير src إلى /images/logo.jpg 
-          */}
           <Image 
             src="/images/logo.png" 
             alt="شعار امتداد جروب" 
@@ -98,7 +109,7 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
             height={120}
             className="object-cover w-full h-full transform group-hover:scale-105 transition-transform duration-500"
             priority
-            unoptimized={true} // لتجنب مشاكل التحميل إذا كانت الصورة كبيرة
+            unoptimized={true}
           />
         </div>
         
@@ -109,7 +120,6 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
         </div>
       </div>
 
-      {/* القائمة الجانبية */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
         {menuItems.map((item) => (
           <button key={item.id} onClick={() => { setActiveTab(item.id); setIsOpen(false); }}
@@ -124,7 +134,6 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
         ))}
       </nav>
       
-      {/* تذييل القائمة */}
       <div className="p-3 border-t border-slate-800 space-y-1.5">
         <button
           onClick={handleExport}
@@ -137,6 +146,13 @@ export default function Sidebar({ activeTab, setActiveTab }: { activeTab: string
           ⬆ استيراد نسخة احتياطية
           <input type="file" accept="application/json" onChange={handleImportFile} className="hidden" disabled={busy} />
         </label>
+        <button
+          onClick={handleLogout}
+          disabled={busy}
+          className="w-full flex items-center justify-center gap-2 bg-red-600/10 hover:bg-red-600/20 border border-red-500/20 text-red-400 text-xs py-2.5 rounded-lg transition disabled:opacity-50"
+        >
+          🚪 تسجيل الخروج
+        </button>
       </div>
       <div className="p-4 border-t border-slate-800 text-center bg-[#0b1120]/50">
         <p className="text-[10px] text-slate-500 font-mono">نظام الإدارة المتكامل v2.0</p>

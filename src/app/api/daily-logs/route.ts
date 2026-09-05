@@ -35,9 +35,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'التاريخ والمشروع والعمال مطلوبة' }, { status: 400 });
   }
 
+  // منع تكرار نفس العامل أكثر من مرة داخل نفس الطلب
+  const workerIds = entries.map((e: any) => e.workerId);
+  const uniqueWorkerIds = new Set(workerIds);
+  if (uniqueWorkerIds.size !== workerIds.length) {
+    return NextResponse.json({ error: 'لا يمكن اختيار نفس العامل أكثر من مرة في نفس الطلب' }, { status: 400 });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // منع تسجيل نفس العامل في أي مشروع آخر أو أكثر من مرة في نفس اليوم
+    const existingResult = await client.query(
+      `SELECT dl.worker_id, w.name AS worker_name
+       FROM daily_logs dl
+       JOIN workers w ON w.id = dl.worker_id
+       WHERE dl.user_id = $1 AND dl.log_date = $2 AND dl.worker_id = ANY($3::bigint[])`,
+      [user.id, date, workerIds]
+    );
+
+    if (existingResult.rows.length > 0) {
+      await client.query('ROLLBACK');
+      const names = existingResult.rows.map((r: any) => r.worker_name).join('، ');
+      return NextResponse.json(
+        { error: `العامل/العمال التاليين مسجّلين بالفعل في هذا التاريخ: ${names}` },
+        { status: 409 }
+      );
+    }
+
     const insertedLogs: any[] = [];
 
     for (const entry of entries) {
@@ -48,7 +74,7 @@ export async function POST(request: NextRequest) {
         'SELECT daily_wage FROM workers WHERE id = $1 AND user_id = $2',
         [workerId, user.id]
       );
-      if (workerResult.rows.length === 0) continue; // تجاهل أي عامل غير موجود أو لا يخص المستخدم
+      if (workerResult.rows.length === 0) continue;
 
       const dailyWage = Number(workerResult.rows[0].daily_wage) || 0;
       const hourlyRate = dailyWage / 8;
