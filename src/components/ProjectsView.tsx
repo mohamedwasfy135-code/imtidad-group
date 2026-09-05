@@ -1,21 +1,20 @@
 "use client";
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 
-export interface Project { 
-  id: string; 
-  name: string; 
-  client: string; 
-  budget: number; 
+export interface Project {
+  id: string;
+  name: string;
+  client: string;
+  budget: number;
 }
 
-// التعريف الموحد والصحيح للمصروفات
 export interface Expense {
   id: number;
-  projectId?: string | null; // السماح بـ null للمصاريف الإدارية
+  projectId?: string | null;
   date: string;
   description: string;
   amount: number;
-  type: 'project' | 'admin'; // التصنيف ضروري للفلترة
+  type: 'project' | 'admin';
   invoiceFile?: string;
   fileType?: 'image' | 'pdf';
 }
@@ -38,30 +37,35 @@ interface ProjectsViewProps {
   setPayments: React.Dispatch<React.SetStateAction<Payment[]>>;
 }
 
-export default function ProjectsView({ 
-  projects, setProjects, 
-  expenses, setExpenses, 
-  payments, setPayments 
+export default function ProjectsView({
+  projects, setProjects,
+  expenses, setExpenses,
+  payments, setPayments
 }: ProjectsViewProps) {
-  
+
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showNewProjectForm, setShowNewProjectForm] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   const [newProjClient, setNewProjClient] = useState('');
   const [newProjBudget, setNewProjBudget] = useState('');
+  const [savingProject, setSavingProject] = useState(false);
 
   const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<number | null>(null);
   const [expDesc, setExpDesc] = useState('');
   const [expAmount, setExpAmount] = useState('');
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
   const [expType, setExpType] = useState<'project' | 'admin'>('project');
   const [expFile, setExpFile] = useState<File | null>(null);
+  const [existingInvoiceFile, setExistingInvoiceFile] = useState<string | undefined>(undefined);
+  const [savingExpense, setSavingExpense] = useState(false);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [payAmount, setPayAmount] = useState('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [payNotes, setPayNotes] = useState('');
   const [checkFile, setCheckFile] = useState<File | null>(null);
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const getProjectExpenses = (pid: string) => expenses.filter(e => e.projectId === pid && e.type === 'project');
@@ -69,7 +73,8 @@ export default function ProjectsView({
   const getTotalSpent = (pid: string) => getProjectExpenses(pid).reduce((sum, e) => sum + e.amount, 0);
 
   const handleAddProject = async () => {
-    if (!newProjName || !newProjBudget) return;
+    if (!newProjName || !newProjBudget || savingProject) return;
+    setSavingProject(true);
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -82,18 +87,46 @@ export default function ProjectsView({
       setNewProjName(''); setNewProjClient(''); setNewProjBudget(''); setShowNewProjectForm(false);
     } catch {
       alert('تعذر الاتصال بالخادم');
+    } finally {
+      setSavingProject(false);
     }
   };
 
-  const handleAddExpense = async () => {
-    if (!expDesc || !expAmount) return;
+  const resetExpenseForm = () => {
+    setExpDesc(''); setExpAmount(''); setExpFile(null); setExistingInvoiceFile(undefined);
+    setEditingExpenseId(null); setShowExpenseForm(false);
+    setExpDate(new Date().toISOString().split('T')[0]); setExpType('project');
+  };
+
+  const handleOpenAddExpense = () => {
+    resetExpenseForm();
+    setShowExpenseForm(true);
+  };
+
+  const handleOpenEditExpense = (exp: Expense) => {
+    setEditingExpenseId(exp.id);
+    setExpDesc(exp.description);
+    setExpAmount(String(exp.amount));
+    setExpDate(exp.date);
+    setExpType(exp.type);
+    setExistingInvoiceFile(exp.invoiceFile);
+    setExpFile(null);
+    setShowExpenseForm(true);
+  };
+
+  const handleSaveExpense = async () => {
+    if (!expDesc || !expAmount || savingExpense) return;
 
     let fileType: 'image' | 'pdf' | undefined = undefined;
     if (expFile) fileType = expFile.type.includes('pdf') ? 'pdf' : 'image';
 
+    setSavingExpense(true);
     try {
-      const res = await fetch('/api/expenses', {
-        method: 'POST',
+      const isEdit = editingExpenseId !== null;
+      const url = isEdit ? `/api/expenses/${editingExpenseId}` : '/api/expenses';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: expType === 'project' ? selectedProjectId : null,
@@ -101,20 +134,27 @@ export default function ProjectsView({
           description: expDesc,
           amount: parseFloat(expAmount) || 0,
           type: expType,
-          invoiceFile: expFile?.name,
+          invoiceFile: expFile?.name || existingInvoiceFile,
         }),
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || 'فشل حفظ المصروف'); return; }
-      setExpenses(prev => [...prev, { ...data.expense, fileType }]);
-      setExpDesc(''); setExpAmount(''); setExpFile(null); setShowExpenseForm(false);
+      if (isEdit) {
+        setExpenses(prev => prev.map(x => x.id === editingExpenseId ? { ...data.expense, fileType: fileType || x.fileType } : x));
+      } else {
+        setExpenses(prev => [...prev, { ...data.expense, fileType }]);
+      }
+      resetExpenseForm();
     } catch {
       alert('تعذر الاتصال بالخادم');
+    } finally {
+      setSavingExpense(false);
     }
   };
 
   const handleAddPayment = async () => {
-    if (!selectedProjectId || !payAmount) return;
+    if (!selectedProjectId || !payAmount || savingPayment) return;
+    setSavingPayment(true);
     try {
       const res = await fetch('/api/payments', {
         method: 'POST',
@@ -130,6 +170,21 @@ export default function ProjectsView({
       setPayAmount(''); setPayNotes(''); setCheckFile(null); setShowPaymentForm(false);
     } catch {
       alert('تعذر الاتصال بالخادم');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (id: number) => {
+    if (!confirm('هل تريد حذف هذه الدفعة؟')) return;
+    const prev = payments;
+    setPayments(p => p.filter(x => x.id !== id));
+    try {
+      const res = await fetch(`/api/payments/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      alert('تعذر حذف الدفعة، سيتم استرجاعها');
+      setPayments(prev);
     }
   };
 
@@ -170,7 +225,7 @@ export default function ProjectsView({
               <div><label className="block text-sm text-slate-400 mb-1.5">اسم العميل</label><input type="text" value={newProjClient} onChange={(e) => setNewProjClient(e.target.value)} placeholder="مثال: شركة الأبراج" className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none" /></div>
               <div><label className="block text-sm text-slate-400 mb-1.5">الميزانية (د.ك) *</label><input type="number" value={newProjBudget} onChange={(e) => setNewProjBudget(e.target.value)} placeholder="0.000" className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none font-mono" /></div>
             </div>
-            <div className="flex gap-3"><button onClick={handleAddProject} disabled={!newProjName || !newProjBudget} className="px-6 py-3 rounded-lg bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors">حفظ المشروع</button><button onClick={() => setShowNewProjectForm(false)} className="px-6 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">إلغاء</button></div>
+            <div className="flex gap-3"><button onClick={handleAddProject} disabled={!newProjName || !newProjBudget || savingProject} className="px-6 py-3 rounded-lg bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors">{savingProject ? 'جارٍ الحفظ...' : 'حفظ المشروع'}</button><button onClick={() => setShowNewProjectForm(false)} className="px-6 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">إلغاء</button></div>
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -218,7 +273,7 @@ export default function ProjectsView({
           <p className="text-slate-400 text-sm mt-1">العميل: {selectedProject?.client}</p>
         </div>
         <div className="flex gap-3">
-          <button onClick={() => setShowExpenseForm(true)} className="bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2"><span>+</span> إضافة تكلفة</button>
+          <button onClick={handleOpenAddExpense} className="bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2"><span>+</span> إضافة تكلفة</button>
           <button onClick={() => setShowPaymentForm(true)} className="bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-4 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2"><span>+</span> إضافة دفعة</button>
         </div>
       </div>
@@ -239,7 +294,7 @@ export default function ProjectsView({
         ) : (
           <table className="w-full text-right">
             <thead className="bg-[#162032] text-slate-400 text-xs uppercase">
-              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">الوصف</th><th className="px-6 py-4">الفاتورة</th><th className="px-6 py-4 text-left">المبلغ</th></tr>
+              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">الوصف</th><th className="px-6 py-4">الفاتورة</th><th className="px-6 py-4 text-left">المبلغ</th><th className="px-6 py-4 text-left">تعديل</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-700/50">
               {projExpenses.map(e => (
@@ -248,6 +303,7 @@ export default function ProjectsView({
                   <td className="px-6 py-4 text-white">{e.description}</td>
                   <td className="px-6 py-4">{e.invoiceFile ? <span className={`text-xs px-2 py-1 rounded border ${e.fileType === 'pdf' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{e.fileType === 'pdf' ? 'PDF' : 'IMG'}: {e.invoiceFile}</span> : <span className="text-slate-600 text-sm">-</span>}</td>
                   <td className="px-6 py-4 text-red-400 font-bold font-mono text-left">{e.amount.toFixed(3)} د.ك</td>
+                  <td className="px-6 py-4 text-left"><button onClick={() => handleOpenEditExpense(e)} className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 hover:bg-blue-500/10 transition-colors">تعديل</button></td>
                 </tr>
               ))}
             </tbody>
@@ -265,7 +321,7 @@ export default function ProjectsView({
         ) : (
           <table className="w-full text-right">
             <thead className="bg-[#162032] text-slate-400 text-xs uppercase">
-              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">ملاحظات</th><th className="px-6 py-4">صورة الشيك</th><th className="px-6 py-4 text-left">المبلغ</th></tr>
+              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">ملاحظات</th><th className="px-6 py-4">صورة الشيك</th><th className="px-6 py-4 text-left">المبلغ</th><th className="px-6 py-4 text-left">حذف</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-700/50">
               {projPayments.map(p => (
@@ -274,6 +330,7 @@ export default function ProjectsView({
                   <td className="px-6 py-4 text-white">{p.notes || '-'}</td>
                   <td className="px-6 py-4">{p.checkImage ? <span className="text-xs px-2 py-1 rounded border bg-purple-500/10 text-purple-400 border-purple-500/20 flex items-center gap-1 w-fit">📷 {p.checkImage}</span> : <span className="text-slate-600 text-sm">-</span>}</td>
                   <td className="px-6 py-4 text-emerald-400 font-bold font-mono text-left">{p.amount.toFixed(3)} د.ك</td>
+                  <td className="px-6 py-4 text-left"><button onClick={() => handleDeletePayment(p.id)} className="text-red-400 hover:text-red-300 text-lg">×</button></td>
                 </tr>
               ))}
             </tbody>
@@ -284,7 +341,7 @@ export default function ProjectsView({
       {showExpenseForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 w-full max-w-lg p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-white mb-6">إضافة تكلفة جديدة</h3>
+            <h3 className="text-xl font-bold text-white mb-6">{editingExpenseId !== null ? 'تعديل التكلفة' : 'إضافة تكلفة جديدة'}</h3>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 p-1 bg-[#0f172a] rounded-lg border border-slate-700">
                 <button onClick={() => setExpType('project')} className={`py-2 rounded-md text-sm font-medium transition-all ${expType === 'project' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>تكلفة مشروع</button>
@@ -299,13 +356,13 @@ export default function ProjectsView({
                 <label className="block text-sm text-slate-400 mb-1.5">استيراد فاتورة (صورة/PDF)</label>
                 <div className="border-2 border-dashed border-slate-700 rounded-lg p-4 text-center hover:border-blue-500/50 transition-colors relative">
                   <input type="file" accept="image/*,.pdf" onChange={(e) => handleFileChange(e, setExpFile)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  {expFile ? <span className="text-blue-400 text-sm font-medium">📎 {expFile.name}</span> : <span className="text-slate-500 text-sm">اضغط هنا لرفع الملف</span>}
+                  {expFile ? <span className="text-blue-400 text-sm font-medium">📎 {expFile.name}</span> : existingInvoiceFile ? <span className="text-slate-400 text-sm">📎 {existingInvoiceFile} (اضغط للاستبدال)</span> : <span className="text-slate-500 text-sm">اضغط هنا لرفع الملف</span>}
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button onClick={handleAddExpense} disabled={!expDesc || !expAmount} className="flex-1 py-3 rounded-lg bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors">حفظ المصروف</button>
-              <button onClick={() => setShowExpenseForm(false)} className="flex-1 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">إلغاء</button>
+              <button onClick={handleSaveExpense} disabled={!expDesc || !expAmount || savingExpense} className="flex-1 py-3 rounded-lg bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors">{savingExpense ? 'جارٍ الحفظ...' : (editingExpenseId !== null ? 'حفظ التعديلات' : 'حفظ المصروف')}</button>
+              <button onClick={resetExpenseForm} className="flex-1 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">إلغاء</button>
             </div>
           </div>
         </div>
@@ -330,7 +387,7 @@ export default function ProjectsView({
               <div><label className="block text-sm text-slate-400 mb-1.5">ملاحظات</label><textarea value={payNotes} onChange={(e) => setPayNotes(e.target.value)} rows={3} placeholder="رقم الشيك، طريقة الدفع..." className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none resize-none" /></div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button onClick={handleAddPayment} disabled={!payAmount} className="flex-1 py-3 rounded-lg bg-emerald-600 text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors">حفظ الدفعة</button>
+              <button onClick={handleAddPayment} disabled={!payAmount || savingPayment} className="flex-1 py-3 rounded-lg bg-emerald-600 text-white disabled:opacity-50 hover:bg-emerald-700 transition-colors">{savingPayment ? 'جارٍ الحفظ...' : 'حفظ الدفعة'}</button>
               <button onClick={() => setShowPaymentForm(false)} className="flex-1 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors">إلغاء</button>
             </div>
           </div>
