@@ -137,6 +137,22 @@ export default function ProjectsView({
     if (e.target.files && e.target.files[0]) setter(e.target.files[0]);
   };
 
+  const handleDeleteProject = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!confirm('سيتم حذف المشروع وكل مصروفاته ومدفوعاته المرتبطة به نهائياً. هل أنت متأكد؟')) return;
+    const prevProjects = projects;
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      setExpenses(prev => prev.filter(x => x.projectId !== projectId));
+      setPayments(prev => prev.filter(x => x.projectId !== projectId));
+    } catch {
+      alert('تعذر حذف المشروع، سيتم استرجاعه');
+      setProjects(prevProjects);
+    }
+  };
+
   if (!selectedProjectId) {
     return (
       <div className="p-8 max-w-6xl mx-auto" dir="rtl">
@@ -168,7 +184,10 @@ export default function ProjectsView({
                 <div key={p.id} onClick={() => setSelectedProjectId(p.id)} className="bg-[#1e293b] rounded-2xl border border-slate-700/50 p-6 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-900/10 transition-all cursor-pointer group">
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-xl font-bold text-white group-hover:text-blue-400 transition-colors">{p.name}</h3>
-                    <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-700">عرض التفاصيل</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-md border border-slate-700">عرض التفاصيل</span>
+                      <button onClick={(e) => handleDeleteProject(e, p.id)} title="حذف المشروع" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-md w-6 h-6 flex items-center justify-center transition-colors">×</button>
+                    </div>
                   </div>
                   <p className="text-slate-400 text-sm mb-6">العميل: {p.client || 'غير محدد'}</p>
                   <div className="space-y-3">
