@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import WorkersView, { Worker } from '@/components/WorkersView';
 import ProjectsView, { Project, Expense, Payment } from '@/components/ProjectsView';
@@ -19,6 +19,13 @@ export default function Dashboard() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+
+  useEffect(() => {
+    fetch('/api/workers')
+      .then(res => res.json())
+      .then(data => { if (data.workers) setWorkers(data.workers); })
+      .catch(() => {});
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-[#0b1120]" dir="rtl">

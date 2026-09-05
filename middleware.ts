@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose'
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret')
 
 export async function middleware(request: NextRequest) {
-  const isLoginPage = request.nextUrl.pathname === '/login'
+  const isLoginPage = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/register'
   const token = request.cookies.get('auth-token')?.value
 
   let isAuthenticated = false
