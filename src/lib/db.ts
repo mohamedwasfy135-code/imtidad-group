@@ -7,6 +7,8 @@ if (!connectionString) {
 }
 
 export const pool = new Pool({
+  // Fix for Vercel self-signed cert issue
+  connectionTimeoutMillis: 10000,
   connectionString,
   ssl: { rejectUnauthorized: false },
 });
@@ -18,3 +20,4 @@ export async function db(strings: TemplateStringsArray, ...values: any[]) {
   }
   return pool.query(text, values);
 }
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
