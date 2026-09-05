@@ -68,41 +68,69 @@ export default function ProjectsView({
   const getProjectPayments = (pid: string) => payments.filter(p => p.projectId === pid);
   const getTotalSpent = (pid: string) => getProjectExpenses(pid).reduce((sum, e) => sum + e.amount, 0);
 
-  const handleAddProject = () => {
+  const handleAddProject = async () => {
     if (!newProjName || !newProjBudget) return;
-    setProjects(prev => [...prev, {
-      id: Date.now().toString(), name: newProjName, client: newProjClient, budget: parseFloat(newProjBudget) || 0
-    }]);
-    setNewProjName(''); setNewProjClient(''); setNewProjBudget(''); setShowNewProjectForm(false);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProjName, client: newProjClient, budget: parseFloat(newProjBudget) || 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'فشل حفظ المشروع'); return; }
+      setProjects(prev => [...prev, data.project]);
+      setNewProjName(''); setNewProjClient(''); setNewProjBudget(''); setShowNewProjectForm(false);
+    } catch {
+      alert('تعذر الاتصال بالخادم');
+    }
   };
 
-  const handleAddExpense = () => {
+  const handleAddExpense = async () => {
     if (!expDesc || !expAmount) return;
-    
+
     let fileType: 'image' | 'pdf' | undefined = undefined;
     if (expFile) fileType = expFile.type.includes('pdf') ? 'pdf' : 'image';
 
-    setExpenses(prev => [...prev, {
-      id: Date.now(),
-      projectId: expType === 'project' ? selectedProjectId : null,
-      date: expDate,
-      description: expDesc,
-      amount: parseFloat(expAmount) || 0,
-      type: expType,
-      invoiceFile: expFile?.name,
-      fileType
-    }]);
-    
-    setExpDesc(''); setExpAmount(''); setExpFile(null); setShowExpenseForm(false);
+    try {
+      const res = await fetch('/api/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: expType === 'project' ? selectedProjectId : null,
+          date: expDate,
+          description: expDesc,
+          amount: parseFloat(expAmount) || 0,
+          type: expType,
+          invoiceFile: expFile?.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'فشل حفظ المصروف'); return; }
+      setExpenses(prev => [...prev, { ...data.expense, fileType }]);
+      setExpDesc(''); setExpAmount(''); setExpFile(null); setShowExpenseForm(false);
+    } catch {
+      alert('تعذر الاتصال بالخادم');
+    }
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!selectedProjectId || !payAmount) return;
-    setPayments(prev => [...prev, {
-      id: Date.now(), projectId: selectedProjectId, date: payDate,
-      amount: parseFloat(payAmount) || 0, notes: payNotes, checkImage: checkFile?.name
-    }]);
-    setPayAmount(''); setPayNotes(''); setCheckFile(null); setShowPaymentForm(false);
+    try {
+      const res = await fetch('/api/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId, date: payDate,
+          amount: parseFloat(payAmount) || 0, notes: payNotes, checkImage: checkFile?.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'فشل حفظ الدفعة'); return; }
+      setPayments(prev => [...prev, data.payment]);
+      setPayAmount(''); setPayNotes(''); setCheckFile(null); setShowPaymentForm(false);
+    } catch {
+      alert('تعذر الاتصال بالخادم');
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: React.Dispatch<React.SetStateAction<File | null>>) => {

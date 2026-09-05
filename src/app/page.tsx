@@ -25,6 +25,18 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => { if (data.workers) setWorkers(data.workers); })
       .catch(() => {});
+    fetch('/api/projects')
+      .then(res => res.json())
+      .then(data => { if (data.projects) setProjects(data.projects); })
+      .catch(() => {});
+    fetch('/api/expenses')
+      .then(res => res.json())
+      .then(data => { if (data.expenses) setExpenses(data.expenses); })
+      .catch(() => {});
+    fetch('/api/payments')
+      .then(res => res.json())
+      .then(data => { if (data.payments) setPayments(data.payments); })
+      .catch(() => {});
   }, []);
 
   return (
