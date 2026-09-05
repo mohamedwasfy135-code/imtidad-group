@@ -1,6 +1,6 @@
 "use client";
-import { useState, useMemo } from 'react';
-import { Project, Expense } from './ProjectsView'; // استيراد النوع الموحد
+import { useState, useMemo, useRef } from 'react';
+import { Project, Expense } from './ProjectsView';
 
 interface ExpensesViewProps {
   expenses: Expense[];
@@ -10,36 +10,97 @@ interface ExpensesViewProps {
 
 export default function ExpensesView({ expenses, setExpenses, projects }: ExpensesViewProps) {
   const [showForm, setShowForm] = useState(false);
-  
+  const [editingId, setEditingId] = useState<number | null>(null);
+
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [type, setType] = useState<'project' | 'admin'>('admin');
   const [projectId, setProjectId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [existingInvoiceFile, setExistingInvoiceFile] = useState<string | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const isSubmitting = useRef(false);
 
   const [filterType, setFilterType] = useState<'all' | 'project' | 'admin'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleSave = () => {
-    if (!desc || !amount) return;
-    
+  const resetForm = () => {
+    setDesc(''); setAmount(''); setFile(null); setExistingInvoiceFile(undefined);
+    setEditingId(null); setShowForm(false);
+    setDate(new Date().toISOString().split('T')[0]); setType('admin'); setProjectId('');
+  };
+
+  const handleOpenAdd = () => {
+    resetForm();
+    setShowForm(true);
+  };
+
+  const handleOpenEdit = (exp: Expense) => {
+    setEditingId(exp.id);
+    setDesc(exp.description);
+    setAmount(String(exp.amount));
+    setDate(exp.date);
+    setType(exp.type);
+    setProjectId(exp.projectId || '');
+    setExistingInvoiceFile(exp.invoiceFile);
+    setFile(null);
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!desc || !amount || (type === 'project' && !projectId)) return;
+    if (isSubmitting.current) return;
+    isSubmitting.current = true;
+    setSaving(true);
+
     let fileType: 'image' | 'pdf' | undefined = undefined;
     if (file) fileType = file.type.includes('pdf') ? 'pdf' : 'image';
 
-    setExpenses(prev => [...prev, {
-      id: Date.now(),
-      projectId: type === 'project' ? projectId : null,
-      date,
-      description: desc,
-      amount: parseFloat(amount) || 0,
-      type,
-      invoiceFile: file?.name,
-      fileType
-    }]);
+    try {
+      const isEdit = editingId !== null;
+      const url = isEdit ? `/api/expenses/${editingId}` : '/api/expenses';
+      const method = isEdit ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: type === 'project' ? projectId : null,
+          date,
+          description: desc,
+          amount: parseFloat(amount) || 0,
+          type,
+          invoiceFile: file?.name || existingInvoiceFile,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'فشل حفظ المصروف'); return; }
 
-    setDesc(''); setAmount(''); setFile(null);
-    setShowForm(false);
+      if (isEdit) {
+        setExpenses(prev => prev.map(x => x.id === editingId ? { ...data.expense, fileType: fileType || x.fileType } : x));
+      } else {
+        setExpenses(prev => [...prev, { ...data.expense, fileType }]);
+      }
+      resetForm();
+    } catch {
+      alert('تعذر الاتصال بالخادم');
+    } finally {
+      isSubmitting.current = false;
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('هل تريد حذف هذا المصروف نهائياً؟')) return;
+    const prev = expenses;
+    setExpenses(list => list.filter(x => x.id !== id));
+    try {
+      const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      alert('تعذر حذف المصروف، سيتم استرجاعه');
+      setExpenses(prev);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -49,8 +110,8 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
   const filteredExpenses = useMemo(() => {
     return expenses.filter(e => {
       const matchType = filterType === 'all' ? true : e.type === filterType;
-      const matchSearch = searchQuery 
-        ? e.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      const matchSearch = searchQuery
+        ? e.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (e.invoiceFile?.toLowerCase().includes(searchQuery.toLowerCase()))
         : true;
       return matchType && matchSearch;
@@ -63,7 +124,7 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
     return { adminTotal, projectTotal, grandTotal: adminTotal + projectTotal };
   }, [expenses]);
 
-  const getProjectName = (id: string | null) => {
+  const getProjectName = (id: string | null | undefined) => {
     if (!id) return '-';
     return projects.find(p => p.id === id)?.name || 'مشروع محذوف';
   };
@@ -75,7 +136,7 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
           <h2 className="text-3xl font-bold text-white mb-2">سجل المصروفات</h2>
           <p className="text-slate-400">إدارة جميع النفقات الإدارية وتكاليف المشاريع من مكان واحد</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2">
+        <button onClick={handleOpenAdd} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-lg shadow-blue-900/20 flex items-center gap-2">
           <span>+</span> تسجيل مصروف جديد
         </button>
       </header>
@@ -97,12 +158,12 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
 
       <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 p-4 flex flex-col md:flex-row gap-4 items-center">
         <div className="relative flex-1 w-full">
-          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="بحث في الوصف أو اسم الملف..." 
+          <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="بحث في الوصف أو اسم الملف..."
             className="w-full bg-[#0f172a] border border-slate-700 rounded-lg pr-4 pl-4 py-2.5 text-sm text-white focus:border-blue-500 outline-none" />
         </div>
         <div className="flex bg-[#0f172a] rounded-lg p-1 border border-slate-700 w-full md:w-auto">
           {(['all', 'admin', 'project'] as const).map((t) => (
-            <button key={t} onClick={() => setFilterType(t)} 
+            <button key={t} onClick={() => setFilterType(t)}
               className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
                 filterType === t ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
               }`}>
@@ -135,8 +196,8 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                     <td className="px-6 py-4 text-slate-300 font-mono text-sm">{e.date}</td>
                     <td className="px-6 py-4">
                       <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                        e.type === 'admin' 
-                          ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' 
+                        e.type === 'admin'
+                          ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
                           : 'bg-red-500/10 text-red-400 border-red-500/20'
                       }`}>
                         {e.type === 'admin' ? 'مصروف إداري' : 'تكلفة مشروع'}
@@ -144,7 +205,7 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                     </td>
                     <td className="px-6 py-4 text-white font-medium">{e.description}</td>
                     <td className="px-6 py-4 text-slate-400 text-sm">
-                      {e.type === 'project' ? getProjectName(e.projectId ?? null) : 'الإدارة العامة'}
+                      {e.type === 'project' ? getProjectName(e.projectId) : 'الإدارة العامة'}
                     </td>
                     <td className="px-6 py-4">
                       {e.invoiceFile ? (
@@ -156,11 +217,17 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                       ) : <span className="text-slate-600 text-sm">-</span>}
                     </td>
                     <td className="px-6 py-4 text-red-400 font-bold font-mono text-left">{e.amount.toFixed(3)} د.ك</td>
-                    <td className="px-6 py-4 text-center">
-                      <button onClick={() => setExpenses(prev => prev.filter(x => x.id !== e.id))} 
-                        className="text-slate-500 hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-500/10 opacity-0 group-hover:opacity-100" title="حذف">
-                        ×
-                      </button>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => handleOpenEdit(e)}
+                          className="text-blue-400 hover:text-blue-300 text-xs px-2.5 py-1.5 rounded border border-blue-500/30 hover:bg-blue-500/10 transition-colors">
+                          تعديل
+                        </button>
+                        <button onClick={() => handleDelete(e.id)}
+                          className="text-red-400 hover:text-red-300 text-xs px-2.5 py-1.5 rounded border border-red-500/30 hover:bg-red-500/10 transition-colors">
+                          حذف
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -172,9 +239,9 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
-            <h3 className="text-xl font-bold text-white mb-6">تسجيل مصروف جديد</h3>
-            
+          <div className="bg-[#1e293b] rounded-2xl border border-slate-700/50 w-full max-w-lg p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-6">{editingId !== null ? 'تعديل المصروف' : 'تسجيل مصروف جديد'}</h3>
+
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 p-1 bg-[#0f172a] rounded-lg border border-slate-700">
                 <button onClick={() => setType('admin')} className={`py-2.5 rounded-md text-sm font-medium transition-all ${type === 'admin' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
@@ -186,7 +253,7 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
               </div>
 
               {type === 'project' && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                <div>
                   <label className="block text-sm text-slate-400 mb-1.5">اختر المشروع *</label>
                   <select value={projectId} onChange={(e) => setProjectId(e.target.value)}
                     className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-red-500 outline-none appearance-none cursor-pointer">
@@ -198,20 +265,20 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
 
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">الوصف *</label>
-                <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)} 
-                  placeholder={type === 'admin' ? "مثال: فاتورة كهرباء المكتب، راتب موظف..." : "مثال: شراء أسمنت، إيجار معدات..."} 
+                <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)}
+                  placeholder={type === 'admin' ? "مثال: فاتورة كهرباء المكتب..." : "مثال: شراء أسمنت..."}
                   className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none" />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-400 mb-1.5">المبلغ (د.ك) *</label>
-                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.000" 
+                  <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.000"
                     className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none font-mono" />
                 </div>
                 <div>
                   <label className="block text-sm text-slate-400 mb-1.5">التاريخ</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} 
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
                     className="w-full bg-[#0f172a] border border-slate-600 rounded-lg px-4 py-3 text-white focus:border-blue-500 outline-none [color-scheme:dark]" />
                 </div>
               </div>
@@ -221,20 +288,22 @@ export default function ExpensesView({ expenses, setExpenses, projects }: Expens
                 <div className="border-2 border-dashed border-slate-700 rounded-lg p-4 text-center hover:border-blue-500/50 transition-colors relative cursor-pointer">
                   <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   {file ? (
-                    <span className="text-blue-400 text-sm font-medium flex items-center justify-center gap-2">📎 {file.name}</span>
+                    <span className="text-blue-400 text-sm font-medium">📎 {file.name}</span>
+                  ) : existingInvoiceFile ? (
+                    <span className="text-slate-400 text-sm">📎 {existingInvoiceFile} (اضغط للاستبدال)</span>
                   ) : (
-                    <span className="text-slate-500 text-sm">اضغط هنا لرفع الملف أو اسحبه сюда</span>
+                    <span className="text-slate-500 text-sm">اضغط هنا لرفع الملف</span>
                   )}
                 </div>
               </div>
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button onClick={handleSave} disabled={!desc || !amount || (type === 'project' && !projectId)} 
+              <button onClick={handleSave} disabled={!desc || !amount || (type === 'project' && !projectId) || saving}
                 className="flex-1 py-3 rounded-lg bg-blue-600 text-white disabled:opacity-50 hover:bg-blue-700 transition-colors font-medium">
-                حفظ المصروف
+                {saving ? 'جارٍ الحفظ...' : (editingId !== null ? 'حفظ التعديلات' : 'حفظ المصروف')}
               </button>
-              <button onClick={() => setShowForm(false)} 
+              <button onClick={resetForm}
                 className="flex-1 py-3 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors font-medium">
                 إلغاء
               </button>

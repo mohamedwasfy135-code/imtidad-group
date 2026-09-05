@@ -1,5 +1,5 @@
 "use client";
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 export interface Project {
   id: string;
@@ -67,6 +67,10 @@ export default function ProjectsView({
   const [checkFile, setCheckFile] = useState<File | null>(null);
   const [savingPayment, setSavingPayment] = useState(false);
 
+  const isSubmittingProject = useRef(false);
+  const isSubmittingExpense = useRef(false);
+  const isSubmittingPayment = useRef(false);
+
   const selectedProject = projects.find(p => p.id === selectedProjectId);
   const getProjectExpenses = (pid: string) => expenses.filter(e => e.projectId === pid && e.type === 'project');
   const getProjectPayments = (pid: string) => payments.filter(p => p.projectId === pid);
@@ -74,6 +78,8 @@ export default function ProjectsView({
 
   const handleAddProject = async () => {
     if (!newProjName || !newProjBudget || savingProject) return;
+    if (isSubmittingProject.current) return;
+    isSubmittingProject.current = true;
     setSavingProject(true);
     try {
       const res = await fetch('/api/projects', {
@@ -88,6 +94,7 @@ export default function ProjectsView({
     } catch {
       alert('تعذر الاتصال بالخادم');
     } finally {
+      isSubmittingProject.current = false;
       setSavingProject(false);
     }
   };
@@ -116,6 +123,8 @@ export default function ProjectsView({
 
   const handleSaveExpense = async () => {
     if (!expDesc || !expAmount || savingExpense) return;
+    if (isSubmittingExpense.current) return;
+    isSubmittingExpense.current = true;
 
     let fileType: 'image' | 'pdf' | undefined = undefined;
     if (expFile) fileType = expFile.type.includes('pdf') ? 'pdf' : 'image';
@@ -148,12 +157,15 @@ export default function ProjectsView({
     } catch {
       alert('تعذر الاتصال بالخادم');
     } finally {
+      isSubmittingExpense.current = false;
       setSavingExpense(false);
     }
   };
 
   const handleAddPayment = async () => {
     if (!selectedProjectId || !payAmount || savingPayment) return;
+    if (isSubmittingPayment.current) return;
+    isSubmittingPayment.current = true;
     setSavingPayment(true);
     try {
       const res = await fetch('/api/payments', {
@@ -171,6 +183,7 @@ export default function ProjectsView({
     } catch {
       alert('تعذر الاتصال بالخادم');
     } finally {
+      isSubmittingPayment.current = false;
       setSavingPayment(false);
     }
   };
@@ -185,6 +198,19 @@ export default function ProjectsView({
     } catch {
       alert('تعذر حذف الدفعة، سيتم استرجاعها');
       setPayments(prev);
+    }
+  };
+
+  const handleDeleteExpense = async (id: number) => {
+    if (!confirm('هل تريد حذف هذه التكلفة نهائياً؟')) return;
+    const prev = expenses;
+    setExpenses(list => list.filter(x => x.id !== id));
+    try {
+      const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+    } catch {
+      alert('تعذر حذف التكلفة، سيتم استرجاعها');
+      setExpenses(prev);
     }
   };
 
@@ -294,7 +320,7 @@ export default function ProjectsView({
         ) : (
           <table className="w-full text-right">
             <thead className="bg-[#162032] text-slate-400 text-xs uppercase">
-              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">الوصف</th><th className="px-6 py-4">الفاتورة</th><th className="px-6 py-4 text-left">المبلغ</th><th className="px-6 py-4 text-left">تعديل</th></tr>
+              <tr><th className="px-6 py-4">التاريخ</th><th className="px-6 py-4">الوصف</th><th className="px-6 py-4">الفاتورة</th><th className="px-6 py-4 text-left">المبلغ</th><th className="px-6 py-4 text-left">إجراءات</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-700/50">
               {projExpenses.map(e => (
@@ -303,7 +329,12 @@ export default function ProjectsView({
                   <td className="px-6 py-4 text-white">{e.description}</td>
                   <td className="px-6 py-4">{e.invoiceFile ? <span className={`text-xs px-2 py-1 rounded border ${e.fileType === 'pdf' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'}`}>{e.fileType === 'pdf' ? 'PDF' : 'IMG'}: {e.invoiceFile}</span> : <span className="text-slate-600 text-sm">-</span>}</td>
                   <td className="px-6 py-4 text-red-400 font-bold font-mono text-left">{e.amount.toFixed(3)} د.ك</td>
-                  <td className="px-6 py-4 text-left"><button onClick={() => handleOpenEditExpense(e)} className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 hover:bg-blue-500/10 transition-colors">تعديل</button></td>
+                  <td className="px-6 py-4 text-left">
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => handleOpenEditExpense(e)} className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded border border-blue-500/30 hover:bg-blue-500/10 transition-colors">تعديل</button>
+                      <button onClick={() => handleDeleteExpense(e.id)} className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded border border-red-500/30 hover:bg-red-500/10 transition-colors">حذف</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

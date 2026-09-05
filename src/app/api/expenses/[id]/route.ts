@@ -31,3 +31,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     },
   });
 }
+
+export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const user = await getSessionUser(request);
+  if (!user) return NextResponse.json({ error: 'غير مصرح' }, { status: 401 });
+
+  const { id } = await context.params;
+  await db`DELETE FROM expenses WHERE id = ${id} AND user_id = ${user.id}`;
+  return NextResponse.json({ success: true });
+}

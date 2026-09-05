@@ -37,6 +37,10 @@ export default function Dashboard() {
       .then(res => res.json())
       .then(data => { if (data.payments) setPayments(data.payments); })
       .catch(() => {});
+    fetch('/api/daily-logs')
+      .then(res => res.json())
+      .then(data => { if (data.logs) setLogs(data.logs); })
+      .catch(() => {});
   }, []);
 
   return (
